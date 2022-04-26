@@ -54,7 +54,7 @@ module TestCenter
               Scan.devices = @options[:scan_devices_override]
             end
           end
- 
+
           values = scan_config.values(ask: false)
           values[:xcode_path] = File.expand_path("../..", FastlaneCore::Helper.xcode_path)
           ScanHelper.print_scan_parameters(values)
@@ -178,7 +178,7 @@ module TestCenter
             }
           )
           if @reportnamer.includes_xcresult?
-            retrying_scan_options[:xcargs] += "-resultBundlePath '#{File.join(output_directory, @reportnamer.xcresult_last_bundlename)}' "
+            retrying_scan_options[:result_bundle] = true
           end
 
           @options.select { |k,v| valid_scan_keys.include?(k) }
@@ -188,6 +188,16 @@ module TestCenter
         # after_testrun methods
 
         def after_testrun(exception = nil)
+          FastlaneCore::UI.verbose("after_testrun: exception=#{exception} scan_cache=#{scan_cache} Fastlane::Actions.lane_context=#{Fastlane::Actions.lane_context}")
+
+          if @reportnamer.includes_xcresult?
+            wanted_xcresult_path = File.join(output_directory, @reportnamer.xcresult_last_bundlename)
+            generated_xcresult_path = scan_cache[:result_bundle_path]
+
+            FastlaneCore::UI.message("Going to move #{generated_xcresult_path} to #{wanted_xcresult_path}")
+            File.rename(generated_xcresult_path, wanted_xcresult_path)
+          end
+
           move_simulator_logs_for_next_run
 
           @testrun_count = @testrun_count + 1
@@ -447,7 +457,7 @@ module TestCenter
           return unless @options[:result_bundle]
 
           result_extension = FastlaneCore::Helper.xcode_at_least?('11') ? '.xcresult' : '.test_result'
-          
+
           glob_pattern = "#{output_directory}/*#{result_extension}"
           preexisting_test_result_bundles = Dir.glob(glob_pattern)
           unnumbered_test_result_bundles = preexisting_test_result_bundles.reject do |test_result|
